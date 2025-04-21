@@ -1,143 +1,166 @@
+import org.gradle.api.tasks.bundling.Zip
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-import org.jreleaser.model.Active
+import org.gradle.jvm.toolchain.JavaLanguageVersion
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import org.gradle.kotlin.dsl.invoke
+import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
+
 
 plugins {
-    kotlin("jvm") version "1.9.20"
+    kotlin("jvm") version "1.9.23"
     `java-library`
     `maven-publish`
-    id("signing")
-    id("org.jreleaser") version "1.17.0"
+    signing
 }
 
 group = "com.africapoa.fn"
-version = "0.0.3"
+version = "0.0.2"
+val  artifactId = "util"
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    // Kotlin Standard Library
     implementation(kotlin("stdlib"))
+
+    // Google Cloud
     implementation(platform("com.google.cloud:libraries-bom:26.50.0"))
     implementation("com.google.cloud:google-cloud-storage")
     implementation("com.google.auth:google-auth-library-oauth2-http")
 
     // Google API Services
     implementation("com.google.apis:google-api-services-sheets:v4-rev612-1.25.0")
-    implementation("com.google.apis:google-api-services-calendar:v3-rev20230707-2.0.0") // Updated version
+    implementation("com.google.apis:google-api-services-calendar:v3-rev20230707-2.0.0")
+
+    // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.1")
 
+    // Testing
     testImplementation(platform("org.junit:junit-bom:5.10.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("io.mockk:mockk:1.13.5")
 }
 
-
-tasks.withType<KotlinCompile> {
-    kotlinOptions.jvmTarget = "17"
-}
-
-
 java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(21))
+    }
     withSourcesJar()
     withJavadocJar()
-    toolchain {
-        languageVersion.set(JavaLanguageVersion.of(17))
-    }
 }
 
 kotlin {
-    jvmToolchain(17)
+    jvmToolchain(21)
 }
-tasks.test {
-    useJUnitPlatform() // Enables JUnit 5
 
+tasks.withType<KotlinCompile>().configureEach {
+    kotlinOptions.jvmTarget = "21"
+}
+
+tasks.test {
+    useJUnitPlatform()
     testLogging {
-        events("passed", "skipped", "failed") // Logs test events
-        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        events("passed", "skipped", "failed")
+        exceptionFormat = TestExceptionFormat.FULL
     }
 }
 
 publishing {
     publications {
         create<MavenPublication>("maven") {
-            groupId = "com.africapoa.fn"
-            artifactId = "util"
+            // Coordinates
+            groupId = project.group.toString()
+            version = project.version.toString()
+            artifactId = artifactId
 
+            // Artifacts
             from(components["java"])
-//            artifact(tasks.named("sourcesJar"))
-//            artifact(tasks.named("javadocJar"))
+
+            // POM
             pom {
                 name.set("util")
                 description.set("Sample application")
                 url.set("https://github.com/nitusima/fn-utils")
                 inceptionYear.set("2021")
+
+
                 licenses {
                     license {
                         name.set("Apache-2.0")
                         url.set("https://spdx.org/licenses/Apache-2.0.html")
+                        distribution.set("repo")
                     }
                 }
+
                 developers {
                     developer {
                         id.set("nitusima")
                         name.set("Nitu")
                         email.set("nitu@africapoa.com")
+                        url.set("https://github.com/nitusima")
                     }
                 }
-//                scm {
-//                    connection.set("scm:git:https://github.com/nitusima/fn-utils.git")
-//                    developerConnection.set("scm:git:ssh://github.com/nitusima/fn-utils.git")
-//                    url.set("http://github.com/nitusima/fn-utils.git")
-//                }
+
+                issueManagement {
+                    system.set("GitHub")
+                    url.set("https://github.com/nitusima/fn-utils/issues")
+                }
+
+                scm {
+                    connection.set("scm:git:git://github.com/nitusima/fn-utils.git")
+                    developerConnection.set("scm:git:ssh://github.com/nitusima/fn-utils.git")
+                    url.set("https://github.com/nitusima/fn-utils")
+                }
             }
         }
     }
 
     repositories {
+        // Local staging directory for manual upload
         maven {
             name = "staging"
             url = uri(layout.buildDirectory.dir("staging-deploy"))
         }
-        mavenLocal()
+        // Optional: publish to local Maven repo
+//        mavenLocal()
     }
 }
 
-//jreleaser {
-//    signing {
-//        active.set(Active.ALWAYS)
-//        armored.set(true)
-//    }
-//    deploy {
-//        maven {
-//            nexus2 {
-//                create("maven-central") {
-//                    active.set(Active.ALWAYS)
-//                    stagingRepository(layout.buildDirectory.dir("staging-deploy").get().asFile.absolutePath)
-//                    url.set("https://s01.oss.sonatype.org/service/local")
-////                    url.set("https://central.sonatype.com/api/v1/publisher")
-//                    snapshotUrl.set("https://s01.oss.sonatype.org/content/repositories/snapshots/")
-//                    closeRepository.set(true)
-//                    releaseRepository.set(true)
-//                }
-//            }
-//        }
-//    }
-//}
-//
-jreleaser {
-    signing {
-        active.set(Active.ALWAYS)
-        armored.set(true)
-    }
-    deploy {
-        maven {
-            mavenCentral {
-                    active.set(Active.ALWAYS)
-//                    url.set("https://central.sonatype.com/api/v1/publisher")
-//                    stagingRepository(layout.buildDirectory.dir("stagingDeploy").get().asFile.absolutePath)
-            }
-        }
-    }
+signing {
+    val keyFile=findProperty("signing.keyFile") as String
+    val password=findProperty("signing.password") as String
+    val key =  layout.projectDirectory.file(keyFile).asFile.readText(Charsets.UTF_8)
+
+    useInMemoryPgpKeys(key, password)
+    sign(publishing.publications["maven"])
+}
+
+
+tasks.register<Zip>("bundleForMavenCentral") {
+    group = "distribution"
+    description = "Bundles published artifacts into a ZIP for Maven Central."
+
+    // 1. Unwrap the staging dir provider
+    val publicationDir = layout.buildDirectory.dir("staging-deploy")
+
+    // 2. Declare inputs up front (configuration phase)
+    from(publicationDir.map { it.asFile })
+
+    // 3. Include empty dirs if needed
+    includeEmptyDirs = true
+
+    // 4. Name and destination
+    val ver = project.version.toString()
+    println("project artificat is $artifactId")
+    println("project version is $ver")
+    archiveBaseName.set("function-$artifactId")
+    destinationDirectory.set(layout.buildDirectory.dir("maven-central-bundle"))
+
+    // 5. Ensure publish runs first
+    dependsOn(tasks.withType<PublishToMavenRepository>())
+
+
+    // 6. Always rebuild (optional)
+    outputs.upToDateWhen { false }
 }

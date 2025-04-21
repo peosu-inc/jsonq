@@ -7,11 +7,14 @@ import com.africapoa.fn.utils.JsonUtil;
 import javax.annotation.Nullable;
 import java.io.*;
 import java.lang.reflect.Type;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.Duration;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -81,18 +84,27 @@ public class JsonQ {
     }
 
     public static JsonQ fromURL(String urlString) {
-        try {
-            URL url = new URL(urlString);
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("GET");
-            connection.setConnectTimeout(10000); // 10 seconds
-            connection.setReadTimeout(10000);    // 10 seconds
-            connection.connect();
-            InputStream inputStream = connection.getInputStream();
-            return JsonQ.fromIO(inputStream);
-        } catch (IOException e) {log(e);}
+        try( HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(10))
+                .build()) {
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(urlString))
+                    .timeout(Duration.ofSeconds(10))
+                    .GET()
+                    .build();
+
+            HttpResponse<InputStream> response =
+                    client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+
+            return JsonQ.fromIO(response.body());
+        } catch (IOException | InterruptedException e) {
+            log(e);
+            Thread.currentThread().interrupt();
+        }
         return new JsonQ("");
     }
+
 
     /**
      * Creates a JsonQ instance from a File containing JSON data.
@@ -408,13 +420,15 @@ public class JsonQ {
      * @param results The list of results
      * @return A new JsonQ instance with the cleaned results
      */
+    @SuppressWarnings("Java8CollectionRemoveIf")
     private JsonQ fromResults(List<Object> results){
         Iterator<Object> it=results.listIterator();
         while(it.hasNext()){
             Object o=it.next();
             if(o==null)it.remove();
         }
-        return fromPOJO(results.size()==1?results.get(0):results);
+        return fromPOJO(results.size()==1?results.getFirst():results);
+
     }
 
     public JsonQ get(String path) {
@@ -563,16 +577,17 @@ public class JsonQ {
     }
 
     private PathHandler getPathHandler(String fullPath, String path){
-        switch (pathEvaluator.getMatching(path)){
-            case REGULAR_PATH: return this::handleNormalPath;
-            case GLOBED_PATH: return this::globedPath;
-            case PATH_EXPRESSION: return this::filter;
-            case WILDCARD: return this::findMatchingPath;
-            case ARRAY: return this::handleArrayMatch;
-            default:
+        return switch (pathEvaluator.getMatching(path)) {
+            case REGULAR_PATH -> this::handleNormalPath;
+            case GLOBED_PATH -> this::globedPath;
+            case PATH_EXPRESSION -> this::filter;
+            case WILDCARD -> this::findMatchingPath;
+            case ARRAY -> this::handleArrayMatch;
+            default -> {
                 log("Path not found %s. When processing this part %s", fullPath, path);
-                return null;
-        }
+                yield null;
+            }
+        };
     }
 
     private List<Object> find(String jsonPath) {
@@ -653,8 +668,7 @@ public class JsonQ {
         collectionForEach(object, (key, obj) -> {
             obj = getObjectRoot(obj);
             boolean evaluation = false;
-            if (obj instanceof Map<?, ?>) {
-                Map<?, ?> json = (Map<?, ?>) obj;
+            if (obj instanceof Map<?, ?> json) {
                 Matcher m = PathType.JSON_VARIABLE.getPattern().matcher(expression);
                 String exp = expression;
                 while (m.find()) {
@@ -682,17 +696,19 @@ public class JsonQ {
     }
 
     private String prepVariableForExpression(Object val) {
-        if (!(val instanceof String)) {
+        if (!(val instanceof String v)) {
             return isPrimitive(val) ? String.valueOf(val) : null;
         }
-        String v = (String) val;
         return VALUED_TRUE.matcher(v).matches() ? "true"
                 : VALUED_FALSE.matcher(v).matches() ? "false"
                 : String.format("'%s'", v);
     }
 
     private void handleNormalPath(String path, Object object,List<Object> results) {
-        if (path == null || path.isEmpty()) results.add(object);
+        if (path == null || path.isEmpty()) {
+            results.add(object);return;
+        }
+
         Object current = object;
         for (String p : path.split("\\."))
             current = valueAtKey(p, current);
@@ -743,14 +759,12 @@ public class JsonQ {
     }
 
     private void flatForEach(Object input, Taker<Object> consumer) {
-        if (input instanceof Map<?, ?>) {
-            Map<?, ?> data = (Map<?, ?>) input;
+        if (input instanceof Map<?, ?> data) {
             for (Map.Entry<?, ?> entry : data.entrySet()) {
                 Object prop = entry.getValue();
                 if (prop != null) consumer.take(entry.getKey().toString(), prop);
             }
-        } else if (input instanceof List<?>) {
-            List<?> data = (List<?>) input;
+        } else if (input instanceof List<?> data) {
             for (int i = 0, len = data.size(); i < len; i++) {
                 Object obj = data.get(i);
                 if (obj != null) consumer.take(String.valueOf(i), obj);
