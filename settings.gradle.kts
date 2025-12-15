@@ -5,6 +5,4 @@ pluginManagement {
     }
 }
 
-rootProject.name = "com.africapoa.fn"
-
-
+rootProject.name = "jsonq"

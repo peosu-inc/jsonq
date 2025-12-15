@@ -14,8 +14,8 @@ plugins {
 }
 
 group = "com.peosu"
-version = "0.0.3"
-val  artifactId = "fn-utils"
+version = "0.0.1"
+val mavenArtifactId = "jsonq"
 
 repositories {
     mavenCentral()
@@ -75,16 +75,16 @@ publishing {
             // Coordinates
             groupId = project.group.toString()
             version = project.version.toString()
-            artifactId = artifactId
+            artifactId = mavenArtifactId
 
             // Artifacts
             from(components["java"])
 
             // POM
             pom {
-                name.set("fn-utils")
-                description.set("Functional utilities for Java/Kotlin including JsonQ for JSON/YAML querying")
-                url.set("https://github.com/peosu-inc/fn-utils")
+                name.set("jsonq")
+                description.set("Fluent JSON/YAML querying library for Java/Kotlin with path expressions, filtering, and aggregations")
+                url.set("https://github.com/peosu-inc/jsonq")
                 inceptionYear.set("2021")
 
 
@@ -107,13 +107,13 @@ publishing {
 
                 issueManagement {
                     system.set("GitHub")
-                    url.set("https://github.com/peosu-inc/fn-utils/issues")
+                    url.set("https://github.com/peosu-inc/jsonq/issues")
                 }
 
                 scm {
-                    connection.set("scm:git:git://github.com/peosu-inc/fn-utils.git")
-                    developerConnection.set("scm:git:ssh://github.com/peosu-inc/fn-utils.git")
-                    url.set("https://github.com/peosu-inc/fn-utils")
+                    connection.set("scm:git:git://github.com/peosu-inc/jsonq.git")
+                    developerConnection.set("scm:git:ssh://github.com/peosu-inc/jsonq.git")
+                    url.set("https://github.com/peosu-inc/jsonq")
                 }
             }
         }
@@ -155,9 +155,9 @@ tasks.register<Zip>("bundleForMavenCentral") {
 
     // 4. Name and destination
     val ver = project.version.toString()
-    println("project artificat is $artifactId")
+    println("project artifact is $mavenArtifactId")
     println("project version is $ver")
-    archiveBaseName.set("function-$artifactId")
+    archiveBaseName.set("function-$mavenArtifactId")
     destinationDirectory.set(layout.buildDirectory.dir("maven-central-bundle"))
 
     // 5. Ensure publish runs first
@@ -175,7 +175,7 @@ tasks.register("publishToCentralPortal") {
     dependsOn("bundleForMavenCentral")
 
     doLast {
-        val bundleFile = layout.buildDirectory.file("maven-central-bundle/function-$artifactId-${project.version}.zip").get().asFile
+        val bundleFile = layout.buildDirectory.file("maven-central-bundle/function-$mavenArtifactId-${project.version}.zip").get().asFile
 
         if (!bundleFile.exists()) {
             throw GradleException("Bundle file not found: ${bundleFile.absolutePath}")
