@@ -1,4 +1,4 @@
-package com.africapoa.fn.ds;
+package com.peosu.fn.ds;
 
 /**
  * A mutable wrapper for a value of any type.

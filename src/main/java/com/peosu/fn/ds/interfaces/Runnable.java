@@ -1,5 +1,5 @@
 
-package com.africapoa.fn.ds.interfaces;
+package com.peosu.fn.ds.interfaces;
 
 /**
  * Represents a command that can be executed.

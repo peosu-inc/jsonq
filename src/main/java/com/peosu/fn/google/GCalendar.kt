@@ -1,4 +1,4 @@
-package com.africapoa.fn.google
+package com.peosu.fn.google
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
 import com.google.api.client.json.gson.GsonFactory
 import com.google.api.client.util.DateTime

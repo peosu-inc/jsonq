@@ -1,6 +1,6 @@
-package com.africapoa.fn.utils;
+package com.peosu.fn.utils;
 
-import com.africapoa.fn.ds.JsonQ;
+import com.peosu.fn.ds.JsonQ;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;

@@ -13,9 +13,9 @@ plugins {
     signing
 }
 
-group = "com.africapoa.fn"
-version = "0.0.2"
-val  artifactId = "util"
+group = "com.peosu"
+version = "0.0.1"
+val  artifactId = "fn-utils"
 
 repositories {
     mavenCentral()
@@ -32,6 +32,9 @@ dependencies {
     // Google API Services
     implementation("com.google.apis:google-api-services-sheets:v4-rev612-1.25.0")
     implementation("com.google.apis:google-api-services-calendar:v3-rev20230707-2.0.0")
+
+    // YAML support
+    implementation("org.yaml:snakeyaml:2.2")
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.1")
@@ -79,9 +82,9 @@ publishing {
 
             // POM
             pom {
-                name.set("util")
-                description.set("Sample application")
-                url.set("https://github.com/nitusima/fn-utils")
+                name.set("fn-utils")
+                description.set("Functional utilities for Java/Kotlin including JsonQ for JSON/YAML querying")
+                url.set("https://github.com/peosu-inc/fn-utils")
                 inceptionYear.set("2021")
 
 
@@ -95,22 +98,22 @@ publishing {
 
                 developers {
                     developer {
-                        id.set("nitusima")
-                        name.set("Nitu")
-                        email.set("nitu@africapoa.com")
-                        url.set("https://github.com/nitusima")
+                        id.set("peosu")
+                        name.set("Peosu")
+                        email.set("dev@peosu.com")
+                        url.set("https://github.com/peosu")
                     }
                 }
 
                 issueManagement {
                     system.set("GitHub")
-                    url.set("https://github.com/nitusima/fn-utils/issues")
+                    url.set("https://github.com/peosu-inc/fn-utils/issues")
                 }
 
                 scm {
-                    connection.set("scm:git:git://github.com/nitusima/fn-utils.git")
-                    developerConnection.set("scm:git:ssh://github.com/nitusima/fn-utils.git")
-                    url.set("https://github.com/nitusima/fn-utils")
+                    connection.set("scm:git:git://github.com/peosu-inc/fn-utils.git")
+                    developerConnection.set("scm:git:ssh://github.com/peosu-inc/fn-utils.git")
+                    url.set("https://github.com/peosu-inc/fn-utils")
                 }
             }
         }
@@ -163,4 +166,54 @@ tasks.register<Zip>("bundleForMavenCentral") {
 
     // 6. Always rebuild (optional)
     outputs.upToDateWhen { false }
+}
+
+// Task to publish bundle to Maven Central Portal via REST API
+tasks.register("publishToCentralPortal") {
+    group = "publishing"
+    description = "Uploads the bundle to Maven Central Portal (central.sonatype.com)"
+    dependsOn("bundleForMavenCentral")
+
+    doLast {
+        val bundleFile = layout.buildDirectory.file("maven-central-bundle/function-$artifactId-${project.version}.zip").get().asFile
+
+        if (!bundleFile.exists()) {
+            throw GradleException("Bundle file not found: ${bundleFile.absolutePath}")
+        }
+
+        val username = findProperty("centralPortal.username") as String?
+            ?: System.getenv("CENTRAL_PORTAL_USERNAME")
+            ?: throw GradleException("Central Portal username not configured. Set centralPortal.username in gradle.properties or CENTRAL_PORTAL_USERNAME env var")
+
+        val token = findProperty("centralPortal.token") as String?
+            ?: System.getenv("CENTRAL_PORTAL_TOKEN")
+            ?: throw GradleException("Central Portal token not configured. Set centralPortal.token in gradle.properties or CENTRAL_PORTAL_TOKEN env var")
+
+        val publishingType = findProperty("centralPortal.publishingType") as String? ?: "USER_MANAGED"
+
+        println("Uploading ${bundleFile.name} to Maven Central Portal...")
+        println("Bundle size: ${bundleFile.length() / 1024} KB")
+
+        val process = ProcessBuilder(
+            "curl", "-X", "POST",
+            "https://central.sonatype.com/api/v1/publisher/upload",
+            "-u", "$username:$token",
+            "-F", "bundle=@${bundleFile.absolutePath}",
+            "-F", "publishingType=$publishingType",
+            "-H", "Accept: text/plain",
+            "-w", "\nHTTP Status: %{http_code}\n"
+        ).redirectErrorStream(true).start()
+
+        val output = process.inputStream.bufferedReader().readText()
+        val exitCode = process.waitFor()
+
+        println(output)
+
+        if (exitCode != 0 || output.contains("HTTP Status: 4") || output.contains("HTTP Status: 5")) {
+            throw GradleException("Failed to upload bundle to Central Portal")
+        }
+
+        println("Bundle uploaded successfully!")
+        println("Check status at: https://central.sonatype.com/publishing/deployments")
+    }
 }

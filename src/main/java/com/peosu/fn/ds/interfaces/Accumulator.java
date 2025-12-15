@@ -1,5 +1,5 @@
 
-package com.africapoa.fn.ds.interfaces;
+package com.peosu.fn.ds.interfaces;
 
 /**
  * Represents an operation that combines an accumulator value and an input value into a new accumulator value.

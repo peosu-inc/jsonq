@@ -1,7 +1,7 @@
-package com.africapoa.fn.utils;
+package com.peosu.fn.utils;
 
 import com.google.gson.*;
-import com.africapoa.fn.ds.PathType;
+import com.peosu.fn.ds.PathType;
 
 import java.lang.reflect.Type;
 

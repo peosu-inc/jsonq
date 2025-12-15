@@ -1,5 +1,5 @@
 
-package com.africapoa.fn.ds.interfaces;
+package com.peosu.fn.ds.interfaces;
 
 /**
  * Represents an operation that accepts a single input argument and performs an action.

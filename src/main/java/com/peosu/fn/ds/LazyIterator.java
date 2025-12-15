@@ -1,14 +1,14 @@
-package com.africapoa.fn.ds;
+package com.peosu.fn.ds;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 
-import com.africapoa.fn.ds.interfaces.Producer;
-import com.africapoa.fn.ds.interfaces.Function;
+import com.peosu.fn.ds.interfaces.Producer;
+import com.peosu.fn.ds.interfaces.Function;
 
-import static com.africapoa.fn.utils.Log.log;
+import static com.peosu.fn.utils.Log.log;
 
 /**
  * An iterator that lazily applies a series of operations to items produced by a data provider.

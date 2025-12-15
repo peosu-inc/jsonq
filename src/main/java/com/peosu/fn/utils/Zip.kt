@@ -1,7 +1,7 @@
 @file:Suppress("unused")
-package com.africapoa.fn.utils
+package com.peosu.fn.utils
 
-import com.africapoa.fn.ds.FnList
+import com.peosu.fn.ds.FnList
 import java.io.*
 import java.nio.file.Files
 import java.nio.file.Paths

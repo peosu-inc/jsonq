@@ -1,4 +1,4 @@
-package com.africapoa.fn.ds;
+package com.peosu.fn.ds;
 
 import java.util.ArrayList;
 import java.util.Arrays;

@@ -1,5 +1,5 @@
 
-package com.africapoa.fn.ds.interfaces;
+package com.peosu.fn.ds.interfaces;
 
 /**
  * Represents a supplier of results.

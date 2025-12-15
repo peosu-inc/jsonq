@@ -1,4 +1,4 @@
-package com.africapoa.fn.utils
+package com.peosu.fn.utils
 
 import java.time.LocalDate
 import java.time.YearMonth

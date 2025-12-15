@@ -1,11 +1,11 @@
-package com.africapoa.fn.ds;
+package com.peosu.fn.ds;
 
-import com.africapoa.fn.ds.interfaces.Accumulator;
-import com.africapoa.fn.ds.interfaces.Action;
-import com.africapoa.fn.ds.interfaces.Function;
-import com.africapoa.fn.ds.interfaces.Producer;
-import com.africapoa.fn.ds.interfaces.Predicate;
-import com.africapoa.fn.ds.interfaces.Runnable;
+import com.peosu.fn.ds.interfaces.Accumulator;
+import com.peosu.fn.ds.interfaces.Action;
+import com.peosu.fn.ds.interfaces.Function;
+import com.peosu.fn.ds.interfaces.Producer;
+import com.peosu.fn.ds.interfaces.Predicate;
+import com.peosu.fn.ds.interfaces.Runnable;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.jetbrains.annotations.NotNull;
@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.Spliterator;
-import static com.africapoa.fn.utils.Log.log;
+import static com.peosu.fn.utils.Log.log;
 
 /**
  * Class FnList provides functional operations on a list of items.

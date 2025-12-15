@@ -1,4 +1,4 @@
-package com.africapoa.fn.ds;
+package com.peosu.fn.ds;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;

@@ -1,6 +1,6 @@
-package com.africapoa.fn;
+package com.peosu.fn;
 
-import com.africapoa.fn.ds.JsonQ;
+import com.peosu.fn.ds.JsonQ;
 
 import java.io.File;
 import java.util.List;

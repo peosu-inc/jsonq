@@ -1,8 +1,12 @@
-package com.africapoa.fn.ds;
+package com.peosu.fn.ds;
 
 import com.google.gson.*;
 import com.google.gson.reflect.TypeToken;
-import com.africapoa.fn.utils.JsonUtil;
+import com.peosu.fn.utils.JsonUtil;
+import org.yaml.snakeyaml.DumperOptions;
+import org.yaml.snakeyaml.LoaderOptions;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 import javax.annotation.Nullable;
 import java.io.*;
@@ -19,7 +23,7 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static com.africapoa.fn.utils.Log.log;
+import static com.peosu.fn.utils.Log.log;
 
 
 
@@ -107,14 +111,34 @@ public class JsonQ {
 
 
     /**
-     * Creates a JsonQ instance from a File containing JSON data.
+     * Creates a JsonQ instance from a File containing JSON or YAML data.
+     * Automatically detects YAML files by extension (.yml or .yaml).
      *
-     * @param jsonFile The File with JSON data
-     * @return A new JsonQ instance with the parsed JSON structure
+     * @param file The File with JSON or YAML data
+     * @return A new JsonQ instance with the parsed data structure
      */
-    public static JsonQ fromIO(File jsonFile) {
-        if(!jsonFile.exists()) return new JsonQ("");
-        return new JsonQ(val(stringFromIO(jsonFile)));
+    public static JsonQ fromIO(File file) {
+        if (!file.exists()) return new JsonQ("");
+        String name = file.getName().toLowerCase();
+        if (name.endsWith(".yml") || name.endsWith(".yaml")) {
+            return fromYamlFile(file);
+        }
+        return new JsonQ(val(stringFromIO(file)));
+    }
+
+    /**
+     * Creates a JsonQ instance from a YAML file.
+     *
+     * @param yamlFile The File with YAML data
+     * @return A new JsonQ instance with the parsed YAML structure
+     */
+    private static JsonQ fromYamlFile(File yamlFile) {
+        try (InputStream is = new FileInputStream(yamlFile)) {
+            return fromYamlIO(is);
+        } catch (IOException e) {
+            log(e);
+            return new JsonQ("");
+        }
     }
 
     /**
@@ -125,6 +149,99 @@ public class JsonQ {
      */
     public static JsonQ fromPOJO(Object object) {
         return new JsonQ(isPrimitive(object) ? object : getObjectRoot(object));
+    }
+
+    // ===== YAML Support =====
+
+    /**
+     * Creates a JsonQ instance from a YAML string.
+     *
+     * @param yaml The YAML string to parse
+     * @return A new JsonQ instance with the parsed YAML structure
+     */
+    public static JsonQ fromYaml(String yaml) {
+        try {
+            Yaml yamlParser = new Yaml(new SafeConstructor(new LoaderOptions()));
+            Object data = yamlParser.load(yaml);
+            return new JsonQ(data);
+        } catch (Exception e) {
+            log(e);
+            return new JsonQ("");
+        }
+    }
+
+    /**
+     * Creates a JsonQ instance from an InputStream containing YAML data.
+     *
+     * @param yamlStream The InputStream with YAML data
+     * @return A new JsonQ instance with the parsed YAML structure
+     */
+    public static JsonQ fromYamlIO(InputStream yamlStream) {
+        try {
+            Yaml yamlParser = new Yaml(new SafeConstructor(new LoaderOptions()));
+            Object data = yamlParser.load(yamlStream);
+            return new JsonQ(data);
+        } catch (Exception e) {
+            log(e);
+            return new JsonQ("");
+        }
+    }
+
+    /**
+     * Returns a YAML string representation of the data.
+     *
+     * @return The YAML string representation
+     */
+    public String toYaml() {
+        return toYaml(2);
+    }
+
+    /**
+     * Returns a YAML string representation with configurable indentation.
+     *
+     * @param indent The number of spaces to use for indentation
+     * @return The YAML string representation
+     */
+    public String toYaml(int indent) {
+        DumperOptions options = new DumperOptions();
+        options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+        options.setPrettyFlow(true);
+        options.setIndent(Math.max(indent, 1));
+        options.setIndicatorIndent(Math.max(indent - 1, 0));
+        Yaml yaml = new Yaml(options);
+        return yaml.dump(root);
+    }
+
+    /**
+     * Prints the data as YAML to stdout.
+     */
+    public void printYaml() {
+        System.out.println(toYaml());
+    }
+
+    /**
+     * Prints the data as YAML to stdout with configurable indentation.
+     *
+     * @param indent The number of spaces to use for indentation
+     */
+    public void printYaml(int indent) {
+        System.out.println(toYaml(indent));
+    }
+
+    /**
+     * Writes YAML data to a file.
+     *
+     * @param file The file to write to
+     * @return true if successful, false otherwise
+     */
+    public boolean toYamlFile(File file) {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(file))) {
+            writer.write(toYaml());
+            return true;
+        } catch (IOException e) {
+            log(e);
+            return false;
+        }
     }
 
     /**
@@ -770,6 +887,434 @@ public class JsonQ {
                 if (obj != null) consumer.take(String.valueOf(i), obj);
             }
         } else if (input != null) consumer.take("", input);
+    }
+
+    // ===== New methods ported from Python jsonq.py =====
+
+    /**
+     * Creates a JsonQ instance from all JSON files in a folder.
+     *
+     * @param folder The folder containing JSON files
+     * @return A new JsonQ instance with an array of all parsed JSON data
+     */
+    public static JsonQ fromFolder(File folder) {
+        if (!folder.exists() || !folder.isDirectory()) {
+            return new JsonQ(new ArrayList<>());
+        }
+        List<Object> results = new ArrayList<>();
+        File[] files = folder.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (file.isFile()) {
+                    JsonQ jq = fromIO(file);
+                    if (jq.notEmpty()) {
+                        results.add(jq.root);
+                    }
+                }
+            }
+        }
+        return new JsonQ(results);
+    }
+
+    /**
+     * Creates a JsonQ instance from all JSON files in a folder.
+     *
+     * @param folderPath The path to the folder containing JSON files
+     * @return A new JsonQ instance with an array of all parsed JSON data
+     */
+    public static JsonQ fromFolder(String folderPath) {
+        return fromFolder(new File(folderPath));
+    }
+
+    /**
+     * Returns the raw value at the specified path without wrapping in JsonQ.
+     *
+     * @param <T>  The expected type
+     * @param path The JSON path to query
+     * @return The raw value at the path, or null if not found
+     */
+    @SuppressWarnings("unchecked")
+    public <T> T value(String path) {
+        List<Object> results = find(path);
+        if (results.isEmpty()) return null;
+        return results.size() == 1 ? (T) results.getFirst() : (T) results;
+    }
+
+    /**
+     * Returns the raw list of results from a JSON path query.
+     *
+     * @param path The JSON path to query
+     * @return The list of matching objects
+     */
+    public List<Object> findRaw(String path) {
+        return find(path);
+    }
+
+    /**
+     * Returns a JSON string representation with configurable indentation.
+     *
+     * @param indent The number of spaces to use for indentation
+     * @return The formatted JSON string
+     */
+    public String toString(int indent) {
+        if (root instanceof String) return (String) root;
+
+        // Compact (no newlines)
+        if (indent <= 0) {
+            Gson compactGson = new GsonBuilder().create();
+            return compactGson.toJson(root);
+        }
+
+        // Pretty print with default 2-space indent
+        Gson prettyGson = new GsonBuilder().setPrettyPrinting().create();
+        if (indent == 2) {
+            return prettyGson.toJson(root);
+        }
+
+        // Custom indent by replacing the default 2-space indent
+        String json = prettyGson.toJson(root);
+        String spaces = " ".repeat(indent);
+        Pattern indentPattern = Pattern.compile("(?m)^(\\s{2})+");
+        Matcher matcher = indentPattern.matcher(json);
+        StringBuilder result = new StringBuilder();
+        while (matcher.find()) {
+            String replacement = spaces.repeat(matcher.group().length() / 2);
+            matcher.appendReplacement(result, replacement);
+        }
+        matcher.appendTail(result);
+        return result.toString();
+    }
+
+    /**
+     * Prints the JSON data to stdout.
+     */
+    public void print() {
+        System.out.println(this);
+    }
+
+    /**
+     * Prints the JSON data to stdout with configurable indentation.
+     *
+     * @param indent The number of spaces to use for indentation
+     */
+    public void print(int indent) {
+        System.out.println(toString(indent));
+    }
+
+    /**
+     * Modifies a value at the specified path using a transformation function.
+     *
+     * @param path The JSON path to the value to modify
+     * @param func The transformation function to apply
+     */
+    public void change(String path, JFunction<Object, Object> func) {
+        Object current = get(path).root;
+        Object newValue = func.apply(current);
+        put(path, newValue);
+    }
+
+    /**
+     * Adds a value to the list at the specified path.
+     *
+     * @param path  The JSON path to the list
+     * @param value The value to add
+     */
+    public void add(String path, Object value) {
+        List<Object> targets = find(path);
+        boolean appended = false;
+        for (Object target : targets) {
+            Object container = getObjectRoot(target);
+            if (container instanceof List<?>) {
+                @SuppressWarnings("unchecked")
+                List<Object> list = (List<Object>) container;
+                list.add(value);
+                appended = true;
+            }
+        }
+        if (!appended && !path.isEmpty()) {
+            put(path, value);
+        }
+    }
+
+    /**
+     * Merges a value into the node(s) at the specified path.
+     *
+     * @param path       The JSON path to merge into
+     * @param value      The value to merge
+     * @param listPolicy How to handle list merging: "extend" (default), "replace", or "append"
+     */
+    @SuppressWarnings("unchecked")
+    public void merge(String path, Object value, String listPolicy) {
+        List<Object> targets = find(path);
+        boolean merged = false;
+
+        for (Object target : targets) {
+            Object container = getObjectRoot(target);
+            if (container instanceof Map || container instanceof List) {
+                mergeValues(container, getObjectRoot(value), listPolicy);
+                merged = true;
+            }
+        }
+
+        if (!merged && !path.isEmpty()) {
+            // Try to merge into parent
+            int lastDot = path.lastIndexOf('.');
+            int lastBracket = path.lastIndexOf('[');
+            int splitPos = Math.max(lastDot, lastBracket);
+
+            if (splitPos > 0) {
+                String parentPath = path.substring(0, splitPos);
+                String field = lastDot > lastBracket
+                        ? path.substring(lastDot + 1)
+                        : path.substring(lastBracket).replaceAll("[\\[\\]\"]", "");
+
+                List<Object> parents = find(parentPath);
+                for (Object parent : parents) {
+                    Object container = getObjectRoot(parent);
+                    if (container instanceof Map) {
+                        Map<String, Object> map = (Map<String, Object>) container;
+                        if (!map.containsKey(field) || map.get(field) == null) {
+                            map.put(field, value);
+                        } else {
+                            map.put(field, mergeValues(map.get(field), value, listPolicy));
+                        }
+                    }
+                }
+            } else {
+                put(path, value);
+            }
+        }
+    }
+
+    /**
+     * Merges a value into the node(s) at the specified path with default "extend" policy.
+     *
+     * @param path  The JSON path to merge into
+     * @param value The value to merge
+     */
+    public void merge(String path, Object value) {
+        merge(path, value, "extend");
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object mergeValues(Object target, Object incoming, String listPolicy) {
+        Object targetRoot = getObjectRoot(target);
+        Object incomingRoot = getObjectRoot(incoming);
+
+        if (targetRoot instanceof Map && incomingRoot instanceof Map) {
+            Map<String, Object> targetMap = (Map<String, Object>) targetRoot;
+            Map<String, Object> incomingMap = (Map<String, Object>) incomingRoot;
+
+            for (Map.Entry<String, Object> entry : incomingMap.entrySet()) {
+                String key = entry.getKey();
+                Object incomingVal = entry.getValue();
+
+                if (targetMap.containsKey(key)) {
+                    Object targetVal = targetMap.get(key);
+                    if ((targetVal instanceof Map || targetVal instanceof List)
+                            && (incomingVal instanceof Map || incomingVal instanceof List)) {
+                        targetMap.put(key, mergeValues(targetVal, incomingVal, listPolicy));
+                    } else {
+                        targetMap.put(key, incomingVal);
+                    }
+                } else {
+                    targetMap.put(key, incomingVal);
+                }
+            }
+            return targetRoot;
+        }
+
+        if (targetRoot instanceof List) {
+            List<Object> targetList = (List<Object>) targetRoot;
+            mergeIntoList(targetList, incomingRoot, listPolicy);
+            return targetRoot;
+        }
+
+        return incomingRoot;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void mergeIntoList(List<Object> target, Object incoming, String listPolicy) {
+        if ("replace".equals(listPolicy) && incoming instanceof List) {
+            target.clear();
+            target.addAll((List<Object>) incoming);
+            return;
+        }
+
+        if (incoming instanceof List) {
+            if ("append".equals(listPolicy)) {
+                target.add(incoming);
+            } else { // default: extend
+                target.addAll((List<Object>) incoming);
+            }
+        } else {
+            target.add(incoming);
+        }
+    }
+
+    /**
+     * Applies multiple merge operations from a path-value mapping.
+     *
+     * @param mapping    A map of JSON paths to values to merge
+     * @param listPolicy How to handle list merging
+     */
+    public void mergeMany(Map<String, Object> mapping, String listPolicy) {
+        for (Map.Entry<String, Object> entry : mapping.entrySet()) {
+            String path = entry.getKey() == null ? "" : entry.getKey();
+            merge(path, entry.getValue(), listPolicy);
+        }
+    }
+
+    /**
+     * Applies multiple merge operations with default "extend" policy.
+     *
+     * @param mapping A map of JSON paths to values to merge
+     */
+    public void mergeMany(Map<String, Object> mapping) {
+        mergeMany(mapping, "extend");
+    }
+
+    /**
+     * Returns all keys at the given path.
+     *
+     * @param path The JSON path to query
+     * @return A list of keys
+     */
+    public List<String> keys(String path) {
+        return keys(path, false);
+    }
+
+    /**
+     * Returns all keys at the given path.
+     *
+     * @param path    The JSON path to query
+     * @param trimmed If true, returns only the final key name without the full path
+     * @return A list of keys
+     */
+    public List<String> keys(String path, boolean trimmed) {
+        Map<String, Object> leafMap = leaves(path);
+        if (trimmed) {
+            return leafMap.keySet().stream()
+                    .map(k -> k.replaceAll(".+\\.(\\w+)$", "$1"))
+                    .distinct()
+                    .toList();
+        }
+        return new ArrayList<>(leafMap.keySet());
+    }
+
+    /**
+     * Returns all leaf (primitive) values as a flat map of path to value.
+     *
+     * @param path The JSON path to start from
+     * @return A map of full paths to their primitive values
+     */
+    public Map<String, Object> leaves(String path) {
+        return leaves(path, null);
+    }
+
+    /**
+     * Returns all leaf (primitive) values as a flat map, filtered by a predicate.
+     *
+     * @param path      The JSON path to start from
+     * @param predicate A predicate to filter leaves (path, value) -> boolean, or null for all
+     * @return A map of full paths to their primitive values
+     */
+    public Map<String, Object> leaves(String path, BiPredicate<String, Object> predicate) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        Object obj = get(path).root;
+
+        if (isPrimitive(obj)) {
+            if (predicate == null || predicate.test(path, obj)) {
+                result.put(path, obj);
+            }
+            return result;
+        }
+
+        Set<String> seen = new HashSet<>();
+        Deque<Map.Entry<String, Object>> stack = new ArrayDeque<>();
+        stack.push(new AbstractMap.SimpleEntry<>(path, obj));
+
+        while (!stack.isEmpty()) {
+            Map.Entry<String, Object> entry = stack.pop();
+            String currentPath = entry.getKey().replaceAll("^\\.", "");
+            Object current = entry.getValue();
+
+            if (seen.contains(currentPath)) continue;
+            seen.add(currentPath);
+
+            if (current instanceof Map<?, ?> map) {
+                for (Map.Entry<?, ?> e : map.entrySet()) {
+                    String newPath = currentPath.isEmpty()
+                            ? e.getKey().toString()
+                            : currentPath + "." + e.getKey();
+                    if (e.getValue() != null) {
+                        stack.push(new AbstractMap.SimpleEntry<>(newPath, e.getValue()));
+                    }
+                }
+            } else if (current instanceof List<?> list) {
+                for (int i = 0; i < list.size(); i++) {
+                    String newPath = currentPath.isEmpty()
+                            ? String.valueOf(i)
+                            : currentPath + "." + i;
+                    if (list.get(i) != null) {
+                        stack.push(new AbstractMap.SimpleEntry<>(newPath, list.get(i)));
+                    }
+                }
+            } else if (isPrimitive(current)) {
+                if (predicate == null || predicate.test(currentPath, current)) {
+                    result.put(currentPath, current);
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Fills a template with values from the current JSON data.
+     * Template values starting with '$' are replaced with values from this JsonQ.
+     *
+     * @param template The template object (Map or List structure)
+     * @return A new object with template values filled in
+     */
+    public Object fillTemplate(Object template) {
+        JsonQ templateQ = fromPOJO(template);
+        Map<String, Object> templateLeaves = templateQ.leaves("", (path, value) ->
+                value instanceof String && ((String) value).startsWith("$"));
+
+        for (Map.Entry<String, Object> entry : templateLeaves.entrySet()) {
+            String templatePath = entry.getKey();
+            String valuePath = ((String) entry.getValue()).substring(1); // Remove leading $
+
+            // Try direct path first
+            Object value = this.value(valuePath);
+            if (value == null) {
+                // Try bracket notation
+                String queryPath = valuePath.replaceAll("([^.]+)", "[\"$1\"]").replace(".", "");
+                value = this.value(queryPath);
+            }
+
+            // Put using dot notation path
+            templateQ.put(templatePath, value);
+        }
+        return templateQ.root;
+    }
+
+    /**
+     * Fills a template from a file with values from the current JSON data.
+     *
+     * @param templateFile The file containing the template JSON
+     * @return A new object with template values filled in
+     */
+    public Object fillTemplate(File templateFile) {
+        JsonQ templateQ = fromIO(templateFile);
+        return fillTemplate(templateQ.root);
+    }
+
+    /**
+     * Functional interface for predicates with two arguments.
+     */
+    public interface BiPredicate<T, U> {
+        boolean test(T t, U u);
     }
 
     private interface PathHandler { void handle(String path, Object jsonThing, List<Object> results);}

@@ -1,6 +1,6 @@
 @file:Suppress("unused")
 
-package com.africapoa.fn.utils
+package com.peosu.fn.utils
 
 import java.io.ByteArrayInputStream
 import java.io.File

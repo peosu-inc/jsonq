@@ -1,4 +1,4 @@
-import com.africapoa.fn.ds.PathType;
+import com.peosu.fn.ds.PathType;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
