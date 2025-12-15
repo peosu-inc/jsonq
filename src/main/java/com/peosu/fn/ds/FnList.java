@@ -48,6 +48,30 @@ public class FnList<T> implements Iterable<T> {
     private final LazyIterator<T> lazy;
 
     /**
+     * When true, exceptions are thrown instead of being logged and swallowed.
+     */
+    private static boolean strictMode = false;
+
+    /**
+     * Enables or disables strict mode globally.
+     * In strict mode, exceptions are thrown instead of being logged and swallowed.
+     *
+     * @param enabled true to enable strict mode, false to disable
+     */
+    public static void setStrictMode(boolean enabled) {
+        strictMode = enabled;
+    }
+
+    /**
+     * Returns whether strict mode is currently enabled.
+     *
+     * @return true if strict mode is enabled
+     */
+    public static boolean isStrictMode() {
+        return strictMode;
+    }
+
+    /**
      * Private constructor that initializes the FnList with a given LazyIterator.
      * A copy of the provided lazy iterator is made to ensure isolation.
      *
@@ -225,6 +249,9 @@ public class FnList<T> implements Iterable<T> {
             try {
                 result = accumulator.combine(result, item);
             } catch (Exception e) {
+                if (strictMode) {
+                    throw e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e);
+                }
                 log(e);
             }
         }
@@ -337,15 +364,20 @@ public class FnList<T> implements Iterable<T> {
 
     /**
      * Helper method to execute a Producer while catching and logging any exceptions.
+     * In strict mode, exceptions are rethrown as RuntimeExceptions.
      *
      * @param producer the Producer to execute.
      * @param <T>      the type of the produced element.
-     * @return the produced element or null if an exception occurred.
+     * @return the produced element or null if an exception occurred (in non-strict mode).
+     * @throws RuntimeException if strict mode is enabled and an exception occurs
      */
     private static <T> T ex(Producer<T> producer) {
         try {
             return producer.produce();
         } catch (Exception e) {
+            if (strictMode) {
+                throw e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e);
+            }
             log(e);
         }
         return null;

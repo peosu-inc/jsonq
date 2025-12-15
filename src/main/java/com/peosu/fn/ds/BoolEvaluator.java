@@ -12,6 +12,9 @@ import java.util.regex.Pattern;
  */
 class BoolEvaluator {
 
+    private static final Pattern TOKEN_PATTERN = Pattern.compile("\\d+\\.?\\d*|'[^']*'|[a-zA-Z]+|[+\\-*/^<>!=&|~]+|[()]");
+    private static final Pattern POSTFIX_TOKEN_PATTERN = Pattern.compile("\\d+\\.?\\d*|'[^']*'|[a-zA-Z]+|[+\\-*/^()<>!=&|~]+");
+
     /**
      * Evaluates the given boolean expression.
      * <p>
@@ -53,8 +56,7 @@ class BoolEvaluator {
     private String toPostfix(String infix) {
         StringBuilder output = new StringBuilder();
         Stack<String> operators = new Stack<>();
-        Pattern tokenPattern = Pattern.compile("\\d+\\.?\\d*|'[^']*'|[a-zA-Z]+|[+\\-*/^<>!=&|~]+|[()]");
-        Matcher matcher = tokenPattern.matcher(infix);
+        Matcher matcher = TOKEN_PATTERN.matcher(infix);
 
         while (matcher.find()) {
             String token = matcher.group();
@@ -101,10 +103,14 @@ class BoolEvaluator {
      * @return the precedence level (e.g., 1 for +, -, 4 for comparison operators)
      */
     private static int precedence(String operator) {
-        return "+-".contains(operator) ? 1 :
-                "*/".contains(operator) ? 2 :
-                        "^".contains(operator) ? 3 :
-                                "<><=>===!=!~".contains(operator) ? 4 : -1;
+        return switch (operator) {
+            case "+", "-" -> 1;
+            case "*", "/" -> 2;
+            case "^" -> 3;
+            case "<", ">", "<=", ">=", "==", "!=", "~" -> 4;
+            case "!", "&&", "||", "&", "|" -> 5;
+            default -> -1;
+        };
     }
 
     /**
@@ -116,13 +122,12 @@ class BoolEvaluator {
      */
     private boolean evaluatePostfix(String postfix) {
         Stack<Object> stack = new Stack<>();
-        Pattern tokenPattern = Pattern.compile("\\d+\\.?\\d*|'[^']*'|[a-zA-Z]+|[+\\-*/^()<>!=&|~]+");
-        Matcher matcher = tokenPattern.matcher(postfix);
+        Matcher matcher = POSTFIX_TOKEN_PATTERN.matcher(postfix);
 
         while (matcher.find()) {
             String token = matcher.group();
             if (token.equals("true") || token.equals("false"))
-                stack.push(token.equals("true") ? 1.0 : 0);
+                stack.push(token.equals("true") ? 1.0 : 0.0);
             else if (token.matches("\\d+\\.?\\d*"))
                 stack.push(Double.parseDouble(token));
             else if (token.matches("'[^']*'"))
@@ -134,7 +139,8 @@ class BoolEvaluator {
             else
                 throw new IllegalArgumentException("Unexpected token: " + token);
         }
-        return stack.pop().equals(1.0);
+        Object result = stack.pop();
+        return result instanceof Double && ((Double) result) != 0.0;
     }
 
     /**

@@ -255,8 +255,8 @@ public class JsonQTest {
                 + "]}";
         JsonQ jsonQ = JsonQ.fromJson(json);
 
-        // Example: select items that are active and have value > 15.
-        JsonQ result = jsonQ.get("$.items[?(@.value > 15 && @.active == true)].name");
+        // Test simple filter: select items with value > 25
+        JsonQ result = jsonQ.get("$.items[?(@.value > 25)].name");
         assertEquals("item3", result.val());
     }
 

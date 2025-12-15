@@ -355,8 +355,9 @@ public class JsonQ {
                 Map<String,Object>data=(Map<String,Object>)v;
                 Map<String,Object> selection=new HashMap<>();
                 for(String key:columns){
-                       data.get(key);
-                       selection.put(key,data.get(key));
+                       String actualKey = key.contains(" as ") ? key.split(" as ")[0].trim() : key;
+                       String alias = key.contains(" as ") ? key.split(" as ")[1].trim() : key;
+                       selection.put(alias, data.get(actualKey));
                 }
                 results.add(selection);
             }
@@ -528,7 +529,7 @@ public class JsonQ {
      */
 
     private String escapeRGX(String input){
-       return input.replace("\\","\\\\");
+       return Matcher.quoteReplacement(input);
     }
 
     /**
@@ -560,8 +561,67 @@ public class JsonQ {
      */
     public <T> T val() {
         //noinspection unchecked
-        return isEmpty()?null:(T) root;}
+        return isEmpty()?null:(T) root;
+    }
 
+    /**
+     * Returns the root object, cast to the desired type.
+     * Alias for val() with clearer naming.
+     *
+     * @param <T> The expected type
+     * @return The root object, or null if empty
+     */
+    public <T> T getValue() {
+        return val();
+    }
+
+    /**
+     * Returns an Optional containing the root object.
+     *
+     * @param <T> The expected type
+     * @return Optional containing the value, or empty if null/empty
+     */
+    @SuppressWarnings("unchecked")
+    public <T> Optional<T> getOptional() {
+        return isEmpty() ? Optional.empty() : Optional.ofNullable((T) root);
+    }
+
+    /**
+     * Returns the value at the given path, or defaultValue if not found.
+     *
+     * @param <T> The expected type
+     * @param path The JSON path
+     * @param defaultValue The default value to return if path not found
+     * @return The value at the path, or defaultValue
+     */
+    @SuppressWarnings("unchecked")
+    public <T> T getOrDefault(String path, T defaultValue) {
+        JsonQ result = get(path);
+        return result.isEmpty() ? defaultValue : (T) result.root;
+    }
+
+    /**
+     * Returns the string value at the given path.
+     * Alias for str() with clearer naming.
+     *
+     * @param path The JSON path
+     * @return The string value, or empty string if not found
+     */
+    public String getString(String path) {
+        return str(path);
+    }
+
+    /**
+     * Returns the string value at the given path, or defaultValue if not found.
+     *
+     * @param path The JSON path
+     * @param defaultValue The default value if path not found or empty
+     * @return The string value, or defaultValue
+     */
+    public String getStringOrDefault(String path, String defaultValue) {
+        String result = str(path);
+        return result.isEmpty() ? defaultValue : result;
+    }
 
     public Integer asInt(String jsonPath) {
         Object x=get(jsonPath).root;
@@ -587,14 +647,26 @@ public class JsonQ {
      * Checks if the JSON data has content.
      *
      * @return True if the data is not empty, false otherwise
+     * @deprecated Use {@link #isNotEmpty()} instead
      */
+    @Deprecated
     public boolean hasStuff(){ return !isEmpty(); }
+
+    /**
+     * Checks if the JSON data is not empty.
+     *
+     * @return True if the data is not empty, false otherwise
+     * @deprecated Use {@link #isNotEmpty()} instead
+     */
+    @Deprecated
+    public boolean notEmpty(){ return !isEmpty(); }
+
     /**
      * Checks if the JSON data is not empty.
      *
      * @return True if the data is not empty, false otherwise
      */
-    public boolean notEmpty(){ return !isEmpty(); }
+    public boolean isNotEmpty(){ return !isEmpty(); }
 
     /**
      * Returns a string representation of the JSON data.
@@ -656,10 +728,28 @@ public class JsonQ {
         flatForEach(res, (k, v) -> put(override, v, values));
     }
 
-        public void putNoNull(String jsonPath, Object value) {
-                if(value==null) return;
-                put(jsonPath, value);
-            }
+    /**
+     * Puts a value at the specified path only if the value is not null.
+     *
+     * @param jsonPath The JSON path to modify
+     * @param value The value to set (ignored if null)
+     * @deprecated Use {@link #putIfPresent(String, Object)} instead
+     */
+    @Deprecated
+    public void putNoNull(String jsonPath, Object value) {
+        putIfPresent(jsonPath, value);
+    }
+
+    /**
+     * Puts a value at the specified path only if the value is not null.
+     *
+     * @param jsonPath The JSON path to modify
+     * @param value The value to set (ignored if null)
+     */
+    public void putIfPresent(String jsonPath, Object value) {
+        if (value == null) return;
+        put(jsonPath, value);
+    }
 
     /**
      * @noinspection unchecked
@@ -675,7 +765,7 @@ public class JsonQ {
             if (isMap && !(values[i] instanceof String)) {
                 throw new IllegalArgumentException("attempting to set values to a JSON object without a key");
             }
-            if (isList && !(values[i] instanceof Integer || values[i].toString().matches("\\$|"))) {
+            if (isList && !(values[i] instanceof Integer || values[i].toString().matches("\\$.*"))) {
                 throw new IllegalArgumentException("attempting to set values to a JSON array without a valid integer index");
             }
             if (isMap) {
@@ -1308,6 +1398,201 @@ public class JsonQ {
     public Object fillTemplate(File templateFile) {
         JsonQ templateQ = fromIO(templateFile);
         return fillTemplate(templateQ.root);
+    }
+
+    // ===== Path validation and aggregation methods =====
+
+    /**
+     * Checks if a path exists in the JSON data.
+     *
+     * @param path The JSON path to check
+     * @return true if the path exists and has a value, false otherwise
+     */
+    public boolean exists(String path) {
+        return !get(path).isEmpty();
+    }
+
+    /**
+     * Returns the count of items in the root collection or at the specified path.
+     *
+     * @return The number of items
+     */
+    public int count() {
+        if (root instanceof Collection) {
+            return ((Collection<?>) root).size();
+        } else if (root instanceof Map) {
+            return ((Map<?, ?>) root).size();
+        }
+        return isEmpty() ? 0 : 1;
+    }
+
+    /**
+     * Returns the count of items at the specified path.
+     *
+     * @param path The JSON path
+     * @return The number of items
+     */
+    public int count(String path) {
+        return get(path).count();
+    }
+
+    /**
+     * Calculates the sum of numeric values at the specified path.
+     *
+     * @param path The JSON path to numeric values
+     * @return The sum, or 0 if no numeric values found
+     */
+    public double sum(String path) {
+        List<Object> values = find(path);
+        return values.stream()
+                .filter(v -> v instanceof Number)
+                .mapToDouble(v -> ((Number) v).doubleValue())
+                .sum();
+    }
+
+    /**
+     * Calculates the sum of numeric values in the root collection.
+     *
+     * @return The sum, or 0 if no numeric values found
+     */
+    public double sum() {
+        return sum(".");
+    }
+
+    /**
+     * Calculates the average of numeric values at the specified path.
+     *
+     * @param path The JSON path to numeric values
+     * @return The average, or 0 if no numeric values found
+     */
+    public double avg(String path) {
+        List<Object> values = find(path);
+        return values.stream()
+                .filter(v -> v instanceof Number)
+                .mapToDouble(v -> ((Number) v).doubleValue())
+                .average()
+                .orElse(0.0);
+    }
+
+    /**
+     * Calculates the average of numeric values in the root collection.
+     *
+     * @return The average, or 0 if no numeric values found
+     */
+    public double avg() {
+        return avg(".");
+    }
+
+    /**
+     * Finds the minimum numeric value at the specified path.
+     *
+     * @param path The JSON path to numeric values
+     * @return Optional containing the minimum, or empty if no numeric values
+     */
+    public Optional<Double> min(String path) {
+        List<Object> values = find(path);
+        return values.stream()
+                .filter(v -> v instanceof Number)
+                .mapToDouble(v -> ((Number) v).doubleValue())
+                .min()
+                .stream().boxed().findFirst();
+    }
+
+    /**
+     * Finds the maximum numeric value at the specified path.
+     *
+     * @param path The JSON path to numeric values
+     * @return Optional containing the maximum, or empty if no numeric values
+     */
+    public Optional<Double> max(String path) {
+        List<Object> values = find(path);
+        return values.stream()
+                .filter(v -> v instanceof Number)
+                .mapToDouble(v -> ((Number) v).doubleValue())
+                .max()
+                .stream().boxed().findFirst();
+    }
+
+    // ===== Sorting and limiting methods =====
+
+    /**
+     * Returns a new JsonQ with items sorted by the specified path.
+     * Only works on root collections (List).
+     *
+     * @param path The path to sort by (e.g., "name" or "age")
+     * @return A new JsonQ with sorted items
+     */
+    @SuppressWarnings("unchecked")
+    public JsonQ orderBy(String path) {
+        return orderBy(path, true);
+    }
+
+    /**
+     * Returns a new JsonQ with items sorted by the specified path.
+     *
+     * @param path The path to sort by
+     * @param ascending true for ascending order, false for descending
+     * @return A new JsonQ with sorted items
+     */
+    @SuppressWarnings("unchecked")
+    public JsonQ orderBy(String path, boolean ascending) {
+        if (!(root instanceof List)) {
+            return this;
+        }
+        List<Object> list = new ArrayList<>((List<Object>) root);
+        list.sort((a, b) -> {
+            Object valA = fromPOJO(a).value(path);
+            Object valB = fromPOJO(b).value(path);
+            int cmp = compareValues(valA, valB);
+            return ascending ? cmp : -cmp;
+        });
+        return fromPOJO(list);
+    }
+
+    @SuppressWarnings("unchecked")
+    private int compareValues(Object a, Object b) {
+        if (a == null && b == null) return 0;
+        if (a == null) return -1;
+        if (b == null) return 1;
+        if (a instanceof Number && b instanceof Number) {
+            return Double.compare(((Number) a).doubleValue(), ((Number) b).doubleValue());
+        }
+        if (a instanceof Comparable && b instanceof Comparable) {
+            return ((Comparable<Object>) a).compareTo(b);
+        }
+        return String.valueOf(a).compareTo(String.valueOf(b));
+    }
+
+    /**
+     * Returns a new JsonQ with only the first n items.
+     * Only works on root collections (List).
+     *
+     * @param n The maximum number of items to return
+     * @return A new JsonQ with at most n items
+     */
+    @SuppressWarnings("unchecked")
+    public JsonQ limit(int n) {
+        if (!(root instanceof List)) {
+            return this;
+        }
+        List<Object> list = (List<Object>) root;
+        return fromPOJO(list.stream().limit(n).toList());
+    }
+
+    /**
+     * Returns a new JsonQ with items after skipping the first n.
+     * Only works on root collections (List).
+     *
+     * @param n The number of items to skip
+     * @return A new JsonQ with items after the first n
+     */
+    @SuppressWarnings("unchecked")
+    public JsonQ skip(int n) {
+        if (!(root instanceof List)) {
+            return this;
+        }
+        List<Object> list = (List<Object>) root;
+        return fromPOJO(list.stream().skip(n).toList());
     }
 
     /**
