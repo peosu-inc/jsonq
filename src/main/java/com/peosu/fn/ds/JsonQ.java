@@ -87,6 +87,13 @@ public class JsonQ {
         return new JsonQ(val(stringFromIO(jsonStream)));
     }
 
+    /**
+     * Creates a JsonQ instance by fetching JSON from a URL.
+     * Uses a 10-second timeout for both connection and read operations.
+     *
+     * @param urlString The URL to fetch JSON from
+     * @return A new JsonQ instance with the parsed JSON, or empty JsonQ on error
+     */
     public static JsonQ fromURL(String urlString) {
         try( HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
@@ -267,6 +274,12 @@ public class JsonQ {
         } catch (IOException e) {log(e);return "";}
     }
 
+    /**
+     * Writes the JSON data to a file.
+     *
+     * @param file The file to write to
+     * @return true if successful, false if an error occurred
+     */
     public boolean toFile(File file) {
         try(BufferedWriter writer = new BufferedWriter(new FileWriter(file))) {
             writer.write(this.toString());
@@ -483,6 +496,20 @@ public class JsonQ {
         return str(String.format(jsonPath, args));
     }
 
+    /**
+     * Retrieves a string value from a JSON path.
+     * If the value is not a string, it is converted to JSON format.
+     * <p>
+     * Example usage:
+     * <pre>
+     * JsonQ json = JsonQ.fromJson("{\"name\": \"John\", \"age\": 30}");
+     * String name = json.str("name"); // Returns "John"
+     * String age = json.str("age");   // Returns "30"
+     * </pre>
+     *
+     * @param jsonPath The JSON path to query (e.g., "name", "person.address.city", "items[0].name")
+     * @return The string value, or an empty string if not found
+     */
     public String str(String jsonPath) {
         Object obj = first(jsonPath, o -> o);
         return obj instanceof String ? (String) obj : obj == null ? "" : gson.toJson(obj);
@@ -549,6 +576,27 @@ public class JsonQ {
 
     }
 
+    /**
+     * Queries the JSON data and returns a new JsonQ with the results.
+     * Supports various path expressions including:
+     * <ul>
+     *   <li>Simple paths: "name", "person.address.city"</li>
+     *   <li>Array access: "items[0]", "items[-1]" (last item)</li>
+     *   <li>Wildcards: "items[*].name", "..city" (recursive)</li>
+     *   <li>Filters: "items[?(@.price > 10)]"</li>
+     *   <li>Slices: "items[1:3]", "items[:5]", "items[::2]"</li>
+     * </ul>
+     * <p>
+     * Example usage:
+     * <pre>
+     * JsonQ json = JsonQ.fromJson("{\"items\": [{\"name\": \"a\"}, {\"name\": \"b\"}]}");
+     * JsonQ names = json.get("items[*].name"); // Returns JsonQ containing ["a", "b"]
+     * String first = json.get("items[0].name").str(); // Returns "a"
+     * </pre>
+     *
+     * @param path The JSON path expression
+     * @return A new JsonQ instance containing the query results
+     */
     public JsonQ get(String path) {
         return fromResults(find(path));
     }
@@ -623,11 +671,29 @@ public class JsonQ {
         return result.isEmpty() ? defaultValue : result;
     }
 
+    /**
+     * Returns the integer value at the given JSON path.
+     * <p>
+     * Example usage:
+     * <pre>
+     * JsonQ json = JsonQ.fromJson("{\"age\": 30, \"score\": 95.5}");
+     * Integer age = json.asInt("age");     // Returns 30
+     * Integer score = json.asInt("score"); // Returns 95 (truncated)
+     * </pre>
+     *
+     * @param jsonPath The JSON path to query
+     * @return The integer value, or null if not found or not a number
+     */
     public Integer asInt(String jsonPath) {
         Object x=get(jsonPath).root;
         return x instanceof Number? ((Number)x).intValue():null;
     }
 
+    /**
+     * Returns the root value as an integer.
+     *
+     * @return The integer value of the root
+     */
     public int asInt() {
         return asInt(".");
     }
@@ -957,6 +1023,22 @@ public class JsonQ {
                 : null;
     }
 
+    /**
+     * Iterates over each element in the root collection.
+     * For arrays, the key is the string index ("0", "1", etc.).
+     * For objects, the key is the property name.
+     * <p>
+     * Example usage:
+     * <pre>
+     * JsonQ json = JsonQ.fromJson("[{\"name\": \"a\"}, {\"name\": \"b\"}]");
+     * json.forEach((index, item) -> {
+     *     System.out.println(index + ": " + item.str("name"));
+     * });
+     * // Output: "0: a", "1: b"
+     * </pre>
+     *
+     * @param taker A callback that receives the key and JsonQ-wrapped value for each element
+     */
     public void forEach(Taker<JsonQ> taker) {
         flatForEach(root, (k, v) -> {
             if (v != root) {
@@ -1597,14 +1679,55 @@ public class JsonQ {
 
     /**
      * Functional interface for predicates with two arguments.
+     *
+     * @param <T> The type of the first argument
+     * @param <U> The type of the second argument
      */
     public interface BiPredicate<T, U> {
+        /**
+         * Tests the predicate with the given arguments.
+         *
+         * @param t The first argument
+         * @param u The second argument
+         * @return true if the predicate is satisfied
+         */
         boolean test(T t, U u);
     }
 
     private interface PathHandler { void handle(String path, Object jsonThing, List<Object> results);}
-    public interface Taker<T> { void take(String key, T t);}
-    public interface JFunction<S, T> { T apply(S s);}
+
+    /**
+     * Functional interface for consuming key-value pairs during iteration.
+     * Used with {@link #forEach(Taker)}.
+     *
+     * @param <T> The type of the value
+     */
+    public interface Taker<T> {
+        /**
+         * Processes a key-value pair.
+         *
+         * @param key The key (index for arrays, property name for objects)
+         * @param t The value
+         */
+        void take(String key, T t);
+    }
+
+    /**
+     * Functional interface for transforming values.
+     * Similar to {@link java.util.function.Function} but can throw checked exceptions.
+     *
+     * @param <S> The input type
+     * @param <T> The output type
+     */
+    public interface JFunction<S, T> {
+        /**
+         * Applies this function to the given argument.
+         *
+         * @param s The input value
+         * @return The transformed value
+         */
+        T apply(S s);
+    }
 
     private static final List<SimpleDateFormat> DATE_FORMATS=Arrays. asList(
             new SimpleDateFormat("yyyy-MM-dd",Locale.ENGLISH ),
